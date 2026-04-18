@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+*.npz
+*.bam
+*.bai
+*.cram
+*.crai
+*.log
+.DS_Store
+.env
+venv/
+.venv/
+__pycache__/
