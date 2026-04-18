@@ -109,12 +109,16 @@ def test_full_pipeline():
         print(f"[TEST] HIGH RISK regions: "
               f"{sum(1 for a in result['aberrations'] if a['call'] == 'HIGH_RISK')}")
 
-        # Check output files exist
-        for suffix in ["_bins.bed", "_segments.bed", "_aberrations.bed",
-                       "_regions.bed", "_statistics.txt", "_gender.txt"]:
+        # Check output files exist and contain gxcnv meta-headers
+        for suffix in ["_bins.tsv", "_segments.tsv", "_calls.tsv",
+                       "_regions.tsv", "_qcmetrics.tsv", "_sex.txt"]:
             path = out_prefix + suffix
             assert os.path.exists(path), f"Missing output: {path}"
-            print(f"[TEST] {suffix} OK ({os.path.getsize(path)} bytes)")
+            with open(path) as f:
+                first_line = f.readline()
+            assert first_line.startswith("##gxcnv_version="), \
+                f"Missing ##gxcnv_version meta-header in {suffix}"
+            print(f"[TEST] {suffix} OK ({os.path.getsize(path)} bytes, meta-header verified)")
 
         # 3. Generate plots
         plot_all(out_prefix, sample_name="SAMPLE_TEST", sex=result["sex"])

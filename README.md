@@ -66,19 +66,21 @@ Recommended: ≥ 50 normal female samples for a robust reference panel.
 gxcnv predict sample.npz reference.npz -o results/SAMPLE001
 ```
 
-This generates the following output files:
+This generates the following output files (gxcnv-native TSV format with `##`-prefixed meta-headers):
 
 | File | Description |
 |---|---|
-| `SAMPLE001_bins.bed` | Per-bin Z-scores and normalised ratios |
-| `SAMPLE001_segments.bed` | CBS segments with copy-number estimates |
-| `SAMPLE001_aberrations.bed` | HIGH RISK CNV calls (dual-track confirmed) |
-| `SAMPLE001_regions.bed` | Per-target-region risk summary |
-| `SAMPLE001_statistics.txt` | Run-level QC metrics |
-| `SAMPLE001_gender.txt` | Predicted sex |
+| `SAMPLE001_bins.tsv` | Per-bin Z-scores, GC fraction, obs/exp ratios, and per-bin flags |
+| `SAMPLE001_segments.tsv` | CBS segments with copy-number estimate and segment type |
+| `SAMPLE001_calls.tsv` | HIGH RISK CNV calls confirmed by dual-track AND-gate |
+| `SAMPLE001_regions.tsv` | All target regions: Track A/B scores, Mahalanobis distance, dual_call |
+| `SAMPLE001_qcmetrics.tsv` | Run-level QC metrics (reads, valid bins, median Z, MAD) |
+| `SAMPLE001_sex.txt` | Predicted sex with meta-headers |
 | `SAMPLE001_genome.png` | Genome-wide Z-score plot |
 | `SAMPLE001_regions.png` | Region risk bar chart |
 | `SAMPLE001_qc.png` | QC summary panel |
+
+All TSV files begin with `##gxcnv_version`, `##generated`, and `##algorithm` meta-header lines, followed by a `#`-prefixed column-header line.
 
 ### Step 4: Re-generate plots only
 

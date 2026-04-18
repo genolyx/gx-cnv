@@ -83,31 +83,36 @@ def _setup_style():
 # Helper: load bins.bed
 # ---------------------------------------------------------------------------
 
-def _load_bins_bed(bins_bed_path):
+def _load_bins_tsv(bins_tsv_path):
     """
-    Parse <prefix>_bins.bed into arrays.
+    Parse <prefix>_bins.tsv (gxcnv-native format) into arrays.
+
+    Expected columns (after ##-headers and #-column-header):
+    chrom  start  end  gc_fraction  obs_norm  exp_norm
+    z_score  obs_exp_ratio  flag
 
     Returns
     -------
-    chroms  : list of str
+    chroms  : (N,) str array
     starts  : (N,) int
     ends    : (N,) int
     z_scores: (N,) float
-    ratios  : (N,) float
+    ratios  : (N,) float  (obs_exp_ratio)
     """
     chroms, starts, ends, zs, ratios = [], [], [], [], []
-    with open(bins_bed_path) as fh:
+    with open(bins_tsv_path) as fh:
         for line in fh:
             if line.startswith("#"):
                 continue
             parts = line.strip().split("\t")
-            if len(parts) < 5:
+            if len(parts) < 8:
                 continue
             chroms.append(parts[0])
             starts.append(int(parts[1]))
             ends.append(int(parts[2]))
-            zs.append(float(parts[3]) if parts[3] != "NA" else np.nan)
-            ratios.append(float(parts[4]))
+            # col 6 = z_score, col 7 = obs_exp_ratio
+            zs.append(float(parts[6]) if parts[6] != "NA" else np.nan)
+            ratios.append(float(parts[7]))
     return (
         np.array(chroms),
         np.array(starts, dtype=np.int64),
@@ -117,14 +122,19 @@ def _load_bins_bed(bins_bed_path):
     )
 
 
-def _load_segments_bed(segments_bed_path):
+def _load_segments_tsv(segments_tsv_path):
+    """
+    Parse <prefix>_segments.tsv (gxcnv-native format).
+
+    Columns: chrom  start  end  n_bins  mean_z  copy_number_est  segment_type
+    """
     segs = []
-    with open(segments_bed_path) as fh:
+    with open(segments_tsv_path) as fh:
         for line in fh:
             if line.startswith("#"):
                 continue
             parts = line.strip().split("\t")
-            if len(parts) < 6:
+            if len(parts) < 7:
                 continue
             segs.append({
                 "chrom":  parts[0],
@@ -132,18 +142,26 @@ def _load_segments_bed(segments_bed_path):
                 "end":    int(parts[2]),
                 "mean_z": float(parts[4]),
                 "cn":     float(parts[5]),
+                "type":   parts[6],
             })
     return segs
 
 
-def _load_regions_bed(regions_bed_path):
+def _load_regions_tsv(regions_tsv_path):
+    """
+    Parse <prefix>_regions.tsv (gxcnv-native format).
+
+    Columns: chrom  start  end  region_name  track_a_mean_z
+             track_b_mahal_dist  track_b_pvalue  risk_pct
+             track_a_result  track_b_result  dual_call
+    """
     regions = []
-    with open(regions_bed_path) as fh:
+    with open(regions_tsv_path) as fh:
         for line in fh:
             if line.startswith("#"):
                 continue
             parts = line.strip().split("\t")
-            if len(parts) < 9:
+            if len(parts) < 11:
                 continue
             regions.append({
                 "chrom":    parts[0],
@@ -153,7 +171,7 @@ def _load_regions_bed(regions_bed_path):
                 "mean_z":   float(parts[4]),
                 "p_value":  float(parts[6]),
                 "risk_pct": float(parts[7]),
-                "call":     parts[8],
+                "call":     parts[10],
             })
     return regions
 
@@ -167,15 +185,15 @@ CANONICAL_ORDER = (
 )
 
 
-def plot_genome(bins_bed, segments_bed, output_path,
+def plot_genome(bins_tsv, segments_tsv, output_path,
                 sample_name="Sample", sex="Unknown"):
     """
     Genome-wide Z-score plot with CBS segments.
     """
     _setup_style()
 
-    chroms_arr, starts, ends, z_scores, ratios = _load_bins_bed(bins_bed)
-    segments = _load_segments_bed(segments_bed)
+    chroms_arr, starts, ends, z_scores, ratios = _load_bins_tsv(bins_tsv)
+    segments = _load_segments_tsv(segments_tsv)
 
     # Determine chromosomes present in data
     present = [c for c in CANONICAL_ORDER if np.any(chroms_arr == c)]
@@ -278,14 +296,13 @@ def plot_genome(bins_bed, segments_bed, output_path,
 # Plot 2: Region risk heatmap
 # ---------------------------------------------------------------------------
 
-def plot_regions(regions_bed, output_path, sample_name="Sample",
-                 thresh_p=0.05):
+def plot_regions(regions_tsv, output_path,
+                 sample_name="Sample", thresh_p=0.05):
     """
-    Horizontal bar chart of per-region risk percentage.
+    Horizontal bar chart of risk % per clinical target region.
     """
     _setup_style()
-
-    regions = _load_regions_bed(regions_bed)
+    regions = _load_regions_tsv(regions_tsv)
     if not regions:
         logger.warning("No regions found – skipping region plot.")
         return
@@ -360,13 +377,13 @@ def plot_regions(regions_bed, output_path, sample_name="Sample",
 # Plot 3: QC summary
 # ---------------------------------------------------------------------------
 
-def plot_qc(bins_bed, output_path, sample_name="Sample"):
+def plot_qc(bins_tsv, output_path, sample_name="Sample"):
     """
     QC summary: Z-score distribution + per-chromosome median Z-score.
     """
     _setup_style()
 
-    chroms_arr, starts, ends, z_scores, ratios = _load_bins_bed(bins_bed)
+    chroms_arr, starts, ends, z_scores, ratios = _load_bins_tsv(bins_tsv)
 
     present = [c for c in CANONICAL_ORDER if np.any(chroms_arr == c)]
     chrom_medians = []
@@ -456,35 +473,35 @@ def plot_qc(bins_bed, output_path, sample_name="Sample"):
 
 def plot_all(output_prefix, sample_name=None, sex="Unknown", thresh_p=0.05):
     """
-    Generate all three plots from output files at `output_prefix`.
+    Generate all three plots from gxcnv-native TSV output files at `output_prefix`.
     """
     if sample_name is None:
         sample_name = os.path.basename(output_prefix)
 
-    bins_bed     = f"{output_prefix}_bins.bed"
-    segments_bed = f"{output_prefix}_segments.bed"
-    regions_bed  = f"{output_prefix}_regions.bed"
+    bins_tsv     = f"{output_prefix}_bins.tsv"
+    segments_tsv = f"{output_prefix}_segments.tsv"
+    regions_tsv  = f"{output_prefix}_regions.tsv"
 
-    if os.path.exists(bins_bed) and os.path.exists(segments_bed):
+    if os.path.exists(bins_tsv) and os.path.exists(segments_tsv):
         plot_genome(
-            bins_bed, segments_bed,
+            bins_tsv, segments_tsv,
             f"{output_prefix}_genome.png",
             sample_name=sample_name, sex=sex,
         )
         plot_qc(
-            bins_bed,
+            bins_tsv,
             f"{output_prefix}_qc.png",
             sample_name=sample_name,
         )
     else:
-        logger.warning("bins.bed or segments.bed not found – skipping genome/QC plots.")
+        logger.warning("bins.tsv or segments.tsv not found – skipping genome/QC plots.")
 
-    if os.path.exists(regions_bed):
+    if os.path.exists(regions_tsv):
         plot_regions(
-            regions_bed,
+            regions_tsv,
             f"{output_prefix}_regions.png",
             sample_name=sample_name,
             thresh_p=thresh_p,
         )
     else:
-        logger.warning("regions.bed not found – skipping region plot.")
+        logger.warning("regions.tsv not found – skipping region plot.")
